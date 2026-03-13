@@ -91,48 +91,16 @@ MEDIA_TYPE_NAMES = {
 
 
 class ProgressCallback:
-    """Класс для отслеживания и отображения прогресса."""
+    """Класс для отслеживания прогресса (без вывода в чат)."""
     def __init__(self, message: Message, action_text: str):
         self.message = message
         self.action_text = action_text
         self.last_update_time = time.time()
-        self.last_text = ""
 
     async def __call__(self, current, total, idx=None, total_items=None, filename=None, action="download"):
-        now = time.time()
-        # Обновляем раз в 2 секунды или в самом конце (при 100%)
-        if now - self.last_update_time < 2.0 and current < total:
-            return
-            
-        self.last_update_time = now
-        
-        percent = current * 100 / total if total else 0
-        filled = int(percent / 10)
-        bar = "█" * filled + "░" * (10 - filled)
-        
-        # Формируем текст
-        if action == "download":
-            prefix = "⏳ Скачиваю"
-        else:
-            prefix = "📤 Отправляю"
-            
-        if total_items and total_items > 1:
-            text = f"{prefix} (файл {idx} из {total_items})\n"
-        else:
-            text = f"{prefix} медиа\n"
-            
-        text += f"[{bar}] {percent:.1f}%\n"
-        if filename:
-            # обрезаем длинное имя файла для красоты
-            short_name = filename if len(filename) < 30 else filename[:27] + "..."
-            text += f"📄 `{short_name}`"
-        
-        if text != self.last_text:
-            try:
-                await self.message.edit_text(text)
-                self.last_text = text
-            except Exception:
-                pass
+        # Мы больше не редактируем сообщение каждые 2 секунды, 
+        # чтобы не создавать эффект "мигания" и не выглядеть устаревшим.
+        pass
 
 
 # ============================================
@@ -227,8 +195,9 @@ async def handle_link(client: Client, message: Message):
     if len(items) == 1:
         item = items[0]
         media_name = MEDIA_TYPE_NAMES.get(item["media_type"], "📎 Файл")
-        size_str = format_size(item["file_size"])
-        await status_msg.edit_text(f"📤 Отправляю {media_name.lower()} ({size_str})...")
+        
+        # Убираем лишний текст, оставляем только статус отправки
+        await status_msg.edit_text(f"🚀 Отправляю...")
 
         file_path = item["file_path"]
 
@@ -237,23 +206,30 @@ async def handle_link(client: Client, message: Message):
             await progress(current, total, 1, 1, item["file_name"], "upload")
 
         try:
-            # Отправляем в зависимости от типа
+            # Отправляем в зависимости от типа. 
+            # Для видео не добавляем лишних подписей с размером, чтобы выглядело как пост.
             if item["media_type"] == "photo":
-                await client.send_photo(message.chat.id, photo=file_path, caption=f"{media_name} • {size_str}", progress=upload_progress)
+                await client.send_photo(message.chat.id, photo=file_path, progress=upload_progress)
             elif item["media_type"] == "video":
-                await client.send_video(message.chat.id, video=file_path, caption=f"{media_name} • {size_str}", supports_streaming=True, progress=upload_progress)
+                # supports_streaming=True помогает Telegram не перекодировать видео (если формат подходит)
+                await client.send_video(
+                    message.chat.id, 
+                    video=file_path, 
+                    supports_streaming=True, 
+                    progress=upload_progress
+                )
             elif item["media_type"] == "animation":
-                await client.send_animation(message.chat.id, animation=file_path, caption=f"{media_name} • {size_str}", progress=upload_progress)
+                await client.send_animation(message.chat.id, animation=file_path, progress=upload_progress)
             elif item["media_type"] == "voice":
-                await client.send_voice(message.chat.id, voice=file_path, caption=f"{media_name} • {size_str}", progress=upload_progress)
+                await client.send_voice(message.chat.id, voice=file_path, progress=upload_progress)
             elif item["media_type"] == "audio":
-                await client.send_audio(message.chat.id, audio=file_path, caption=f"{media_name} • {size_str}", progress=upload_progress)
+                await client.send_audio(message.chat.id, audio=file_path, progress=upload_progress)
             elif item["media_type"] == "video_note":
                 await client.send_video_note(message.chat.id, video_note=file_path, progress=upload_progress)
             elif item["media_type"] == "sticker":
                 await client.send_sticker(message.chat.id, sticker=file_path, progress=upload_progress)
             else:
-                await client.send_document(message.chat.id, document=file_path, caption=f"{media_name} • {size_str}", progress=upload_progress)
+                await client.send_document(message.chat.id, document=file_path, progress=upload_progress)
 
             # Удаляем статусное сообщение
             await status_msg.delete()
