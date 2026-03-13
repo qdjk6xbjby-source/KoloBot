@@ -37,27 +37,27 @@ PUBLIC_LINK = re.compile(r"https?://t\.me/([a-zA-Z_][a-zA-Z0-9_]{3,})/(\d+)")
 def parse_telegram_link(url: str):
     """
     Парсит ссылку на сообщение в Telegram.
-    
-    Возвращает (chat_id, message_id) или None.
-    Для приватных каналов chat_id будет отрицательным числом.
-    Для публичных — строкой (username).
+    Поддерживает приватные (t.me/c/...) и публичные ссылки.
     """
     url = url.strip()
 
-    # Проверяем приватную ссылку
-    match = PRIVATE_LINK.search(url)
-    if match:
-        channel_id = match.group(1)
-        message_id = int(match.group(2))
-        # Приватные каналы имеют ID вида -100XXXXXXXXXX
-        chat_id = int(f"-100{channel_id}")
-        return chat_id, message_id
+    # Проверяем приватную ссылку (поддерживаем и темы/топики)
+    # Пример: t.me/c/2657566614/249 или t.me/c/2657566614/1/249
+    private_match = re.search(r"t\.me/c/(\d+)/(\d+)(?:/(\d+))?", url)
+    if private_match:
+        channel_id_str = private_match.group(1)
+        # Если есть 3-я группа, то второй заголовок — это ID темы, а третий — ID сообщения
+        if private_match.group(3):
+            message_id = int(private_match.group(3))
+        else:
+            message_id = int(private_match.group(2))
+        return channel_id_str, message_id
 
     # Проверяем публичную ссылку
-    match = PUBLIC_LINK.search(url)
-    if match:
-        username = match.group(1)
-        message_id = int(match.group(2))
+    public_match = re.search(r"t\.me/([a-zA-Z_][a-zA-Z0-9_]{3,})/(\d+)", url)
+    if public_match:
+        username = public_match.group(1)
+        message_id = int(public_match.group(2))
         return username, message_id
 
     return None
@@ -133,33 +133,51 @@ class TelegramGrabber:
             )
             return result
 
-        chat_id, message_id = parsed
+        raw_chat_id, message_id = parsed
 
         try:
             await self.start()
 
-            # Получаем сообщение
-            try:
-                message = await self.client.get_messages(chat_id, message_id)
-            except Exception as e:
-                # Если ID не найден в локальной базе, пробуем "прогрузить" список диалогов
-                # Это заставляет Pyrogram обновить кеш и узнать access_hash канала
-                if "PEER_ID_INVALID" in str(e).upper() or "VALUEERROR" in str(e).upper():
+            # Пытаемся определить правильный формат ID (для приватных каналов)
+            message = None
+            
+            # Если это число (строка из цифр), пробуем варианты
+            if isinstance(raw_chat_id, str) and raw_chat_id.isdigit():
+                # Возможные варианты ID для Pyrogram:
+                # 1. -100 + ID (стандарт для каналов/супергрупп)
+                # 2. - + ID (для обычных групп)
+                # 3. Просто ID (для пользователей/ботов/сохраненных)
+                id_variants = [f"-100{raw_chat_id}", f"-{raw_chat_id}", raw_chat_id]
+                
+                for attempt_id in id_variants:
                     try:
-                        # Итерируемся по последним 100 диалогам, чтобы найти нужный
-                        async for dialog in self.client.get_dialogs(limit=100):
-                            if dialog.chat.id == chat_id:
-                                break
-                        # Пробуем получить сообщение снова
+                        chat_id = int(attempt_id)
                         message = await self.client.get_messages(chat_id, message_id)
-                    except Exception:
-                        result["error"] = f"❌ Нет доступа к каналу или неверная ссылка.\nID: {chat_id}"
-                        return result
-                else:
-                    raise e
+                        if message and not message.empty:
+                            # Ура, нашли рабочий формат!
+                            break
+                    except Exception as e:
+                        # Если ID не найден в локальной базе, пробуем прогрузить диалоги
+                        if "PEER_ID_INVALID" in str(e).upper() or "VALUEERROR" in str(e).upper():
+                            try:
+                                # Прогружаем чуть глубже
+                                async for dialog in self.client.get_dialogs(limit=150):
+                                    if str(dialog.chat.id).endswith(raw_chat_id):
+                                        break
+                                # Пробуем еще раз после синхронизации
+                                message = await self.client.get_messages(chat_id, message_id)
+                                if message and not message.empty:
+                                    break
+                            except:
+                                continue
+                        continue
+            else:
+                # Для публичных ссылок (username)
+                chat_id = raw_chat_id
+                message = await self.client.get_messages(chat_id, message_id)
 
             if not message or message.empty:
-                result["error"] = "❌ Сообщение не найдено или было удалено."
+                result["error"] = "❌ Сообщение не найдено или доступ ограничен."
                 return result
 
             # Проверяем, часть ли это медиагруппы
