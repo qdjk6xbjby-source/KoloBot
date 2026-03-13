@@ -324,8 +324,13 @@ async def main():
     log.info("  БОТ ЗАПУЩЕН И ГОТОВ К РАБОТЕ!")
     log.info("=" * 40)
 
-    # Ожидаем завершения
-    await asyncio.Event().wait()
+    # Ожидаем завершения и обрабатываем сигналы чисто
+    from pyrogram import idle
+    await idle()
+    
+    log.info("Остановка бота и граббера...")
+    await bot.stop()
+    await grabber.stop()
 
 
 if __name__ == "__main__":
