@@ -142,10 +142,15 @@ class TelegramGrabber:
             try:
                 message = await self.client.get_messages(chat_id, message_id)
             except Exception as e:
-                # Если ID не найден в локальной базе, пробуем "найти" чат принудительно
+                # Если ID не найден в локальной базе, пробуем "прогрузить" список диалогов
+                # Это заставляет Pyrogram обновить кеш и узнать access_hash канала
                 if "PEER_ID_INVALID" in str(e).upper() or "VALUEERROR" in str(e).upper():
                     try:
-                        await self.client.get_chat(chat_id)
+                        # Итерируемся по последним 100 диалогам, чтобы найти нужный
+                        async for dialog in self.client.get_dialogs(limit=100):
+                            if dialog.chat.id == chat_id:
+                                break
+                        # Пробуем получить сообщение снова
                         message = await self.client.get_messages(chat_id, message_id)
                     except Exception:
                         result["error"] = f"❌ Нет доступа к каналу или неверная ссылка.\nID: {chat_id}"
