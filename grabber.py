@@ -143,10 +143,6 @@ class TelegramGrabber:
             
             # Если это число (строка из цифр), пробуем варианты
             if isinstance(raw_chat_id, str) and raw_chat_id.isdigit():
-                # Возможные варианты ID для Pyrogram:
-                # 1. -100 + ID (стандарт для каналов/супергрупп)
-                # 2. - + ID (для обычных групп)
-                # 3. Просто ID (для пользователей/ботов/сохраненных)
                 id_variants = [f"-100{raw_chat_id}", f"-{raw_chat_id}", raw_chat_id]
                 
                 for attempt_id in id_variants:
@@ -154,30 +150,31 @@ class TelegramGrabber:
                         chat_id = int(attempt_id)
                         message = await self.client.get_messages(chat_id, message_id)
                         if message and not message.empty:
-                            # Ура, нашли рабочий формат!
-                            break
+                            break  # Нашли!
+                        else:
+                            message = None # Сбрасываем, чтобы попробовать следующий
                     except Exception as e:
-                        # Если ID не найден в локальной базе, пробуем прогрузить диалоги
-                        if "PEER_ID_INVALID" in str(e).upper() or "VALUEERROR" in str(e).upper():
+                        if "PEER_ID_INVALID" in str(e).upper() or "CHANNEL_PRIVATE" in str(e).upper() or "VALUEERROR" in str(e).upper():
                             try:
-                                # Прогружаем чуть глубже
                                 async for dialog in self.client.get_dialogs(limit=150):
+                                    # Ищем совпадение по ID
                                     if str(dialog.chat.id).endswith(raw_chat_id):
+                                        chat_id = dialog.chat.id
+                                        message = await self.client.get_messages(chat_id, message_id)
                                         break
-                                # Пробуем еще раз после синхронизации
-                                message = await self.client.get_messages(chat_id, message_id)
+                                
                                 if message and not message.empty:
                                     break
-                            except:
-                                continue
-                        continue
+                            except Exception:
+                                pass
+                        
+                        message = None # Сбрасываем
             else:
-                # Для публичных ссылок (username)
                 chat_id = raw_chat_id
                 message = await self.client.get_messages(chat_id, message_id)
 
             if not message or message.empty:
-                result["error"] = "❌ Сообщение не найдено или доступ ограничен."
+                result["error"] = f"❌ Сообщение не найдено или доступ ограничен.\nПроверенные ID: -100{raw_chat_id}"
                 return result
 
             # Проверяем, часть ли это медиагруппы
