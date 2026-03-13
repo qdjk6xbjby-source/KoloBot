@@ -195,6 +195,7 @@ async def handle_link(client: Client, message: Message):
     if len(items) == 1:
         item = items[0]
         media_name = MEDIA_TYPE_NAMES.get(item["media_type"], "📎 Файл")
+        size_str = format_size(item["file_size"])
         
         # Убираем лишний текст, оставляем только статус отправки
         await status_msg.edit_text(f"🚀 Отправляю...")
@@ -254,7 +255,10 @@ async def handle_link(client: Client, message: Message):
             log.info(f"Отправлено: {item['media_type']} | {item['file_name']} | {size_str} | user={message.from_user.id}")
 
         except Exception as e:
-            await status_msg.edit_text(f"❌ Ошибка при отправке: {str(e)}")
+            try:
+                await status_msg.edit_text(f"❌ Ошибка при отправке: {str(e)}")
+            except:
+                pass
             log.error(f"Ошибка отправки: {e}")
 
         finally:
