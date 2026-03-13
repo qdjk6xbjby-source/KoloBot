@@ -215,17 +215,33 @@ async def handle_link(client: Client, message: Message):
                 await client.send_video(
                     message.chat.id, 
                     video=file_path, 
+                    width=item.get("width"),
+                    height=item.get("height"),
+                    duration=item.get("duration"),
                     supports_streaming=True, 
                     progress=upload_progress
                 )
             elif item["media_type"] == "animation":
-                await client.send_animation(message.chat.id, animation=file_path, progress=upload_progress)
+                await client.send_animation(
+                    message.chat.id, 
+                    animation=file_path, 
+                    width=item.get("width"),
+                    height=item.get("height"),
+                    duration=item.get("duration"),
+                    progress=upload_progress
+                )
             elif item["media_type"] == "voice":
                 await client.send_voice(message.chat.id, voice=file_path, progress=upload_progress)
             elif item["media_type"] == "audio":
                 await client.send_audio(message.chat.id, audio=file_path, progress=upload_progress)
             elif item["media_type"] == "video_note":
-                await client.send_video_note(message.chat.id, video_note=file_path, progress=upload_progress)
+                await client.send_video_note(
+                    message.chat.id, 
+                    video_note=file_path, 
+                    duration=item.get("duration"),
+                    length=item.get("length"),
+                    progress=upload_progress
+                )
             elif item["media_type"] == "sticker":
                 await client.send_sticker(message.chat.id, sticker=file_path, progress=upload_progress)
             else:
@@ -260,7 +276,14 @@ async def handle_link(client: Client, message: Message):
             if item["media_type"] == "photo":
                 media_group.append(InputMediaPhoto(item["file_path"], caption=caption))
             elif item["media_type"] == "video":
-                media_group.append(InputMediaVideo(item["file_path"], caption=caption))
+                media_group.append(InputMediaVideo(
+                    item["file_path"], 
+                    caption=caption,
+                    width=item.get("width"),
+                    height=item.get("height"),
+                    duration=item.get("duration"),
+                    supports_streaming=True
+                ))
             elif item["media_type"] == "audio":
                 media_group.append(InputMediaAudio(item["file_path"], caption=caption))
             else:

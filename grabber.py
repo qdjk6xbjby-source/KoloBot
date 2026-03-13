@@ -161,6 +161,9 @@ class TelegramGrabber:
                     item["media_type"] = "video"
                     item["file_name"] = msg.video.file_name or f"video_{msg.id}.mp4"
                     item["file_size"] = msg.video.file_size
+                    item["width"] = msg.video.width
+                    item["height"] = msg.video.height
+                    item["duration"] = msg.video.duration
                 elif msg.photo:
                     item["media_type"] = "photo"
                     item["file_name"] = f"photo_{msg.id}.jpg"
@@ -169,6 +172,9 @@ class TelegramGrabber:
                     item["media_type"] = "animation"
                     item["file_name"] = msg.animation.file_name or f"animation_{msg.id}.mp4"
                     item["file_size"] = msg.animation.file_size
+                    item["width"] = msg.animation.width
+                    item["height"] = msg.animation.height
+                    item["duration"] = msg.animation.duration
                 elif msg.document:
                     item["media_type"] = "document"
                     item["file_name"] = msg.document.file_name or f"document_{msg.id}"
@@ -177,6 +183,8 @@ class TelegramGrabber:
                     item["media_type"] = "video_note"
                     item["file_name"] = f"video_note_{msg.id}.mp4"
                     item["file_size"] = msg.video_note.file_size
+                    item["duration"] = msg.video_note.duration
+                    item["length"] = msg.video_note.length
                 elif msg.voice:
                     item["media_type"] = "voice"
                     item["file_name"] = f"voice_{msg.id}.ogg"
