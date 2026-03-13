@@ -139,9 +139,21 @@ class TelegramGrabber:
             await self.start()
 
             # Получаем сообщение
-            message = await self.client.get_messages(chat_id, message_id)
+            try:
+                message = await self.client.get_messages(chat_id, message_id)
+            except Exception as e:
+                # Если ID не найден в локальной базе, пробуем "найти" чат принудительно
+                if "PEER_ID_INVALID" in str(e).upper() or "VALUEERROR" in str(e).upper():
+                    try:
+                        await self.client.get_chat(chat_id)
+                        message = await self.client.get_messages(chat_id, message_id)
+                    except Exception:
+                        result["error"] = f"❌ Нет доступа к каналу или неверная ссылка.\nID: {chat_id}"
+                        return result
+                else:
+                    raise e
 
-            if message.empty:
+            if not message or message.empty:
                 result["error"] = "❌ Сообщение не найдено или было удалено."
                 return result
 
